@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>股票对比回测</title>
+    <style>
+      body {
+        font-family: -apple-system, "Microsoft YaHei", sans-serif;
+        max-width: 1200px;
+        margin: 40px auto;
+        padding: 0 20px;
+        background: #fafafa;
+      }
+      h2 {
+        margin-bottom: 20px;
+      }
+      .section-label {
+        font-size: 14px;
+        color: #888;
+        margin-bottom: 8px;
+      }
+      #sectorBar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 20px;
+      }
+      .sector-btn {
+        padding: 6px 14px;
+        font-size: 14px;
+        border: 1px solid #1677ff;
+        background: white;
+        color: #1677ff;
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .sector-btn:hover {
+        background: #e6f0ff;
+      }
+      .sector-btn.active {
+        background: #1677ff;
+        color: white;
+      }
+      #codes {
+        padding: 10px 14px;
+        font-size: 15px;
+        width: 100%;
+        max-width: 700px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        box-sizing: border-box;
+      }
+      #btn {
+        padding: 10px 24px;
+        font-size: 16px;
+        cursor: pointer;
+        margin-top: 12px;
+        background: #1677ff;
+        color: white;
+        border: none;
+        border-radius: 6px;
+      }
+      #btn:disabled {
+        background: #aaa;
+        cursor: not-allowed;
+      }
+      #status {
+        margin-top: 15px;
+        color: #666;
+        font-size: 14px;
+      }
+      #imgWrap {
+        margin-top: 20px;
+      }
+      #resultImg {
+        max-width: 100%;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        display: none;
+        background: white;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>回测</h2>
+
+    <div class="section-label">快捷板块</div>
+    <div id="sectorBar"></div>
+
+    <div class="section-label">股票代码（逗号分隔）</div>
+    <input id="codes" type="text" value="603893,301536,688099" />
+    <br />
+    <button id="btn">开始分析</button>
+
+    <div id="status"></div>
+    <div id="imgWrap">
+      <img id="resultImg" alt="回测结果图" />
+    </div>
+
+    <script>
+      // ==================== 配置区 ====================
+      const FC_URL = "https://stock-cmpare-fc-pxahlsnsgg.cn-hangzhou.fcapp.run";
+
+      const SECTORS = [
+        { name: "SOC", codes: "300613,300458,603893,688608,301536,688099" },
+        {
+          name: "锂矿",
+          codes:
+            "002497,002176,002460,002466,000792,002756,002738,000762,002240,002192,001203",
+        },
+        {
+          name: "网络安全",
+          codes: "300017,300369,688561,002212,300659,601360,300454,002439",
+        },
+        {
+          name: "算力",
+          codes:
+            "300017,002396,000938,301165,603019,603881,688158,603220,300209,002929,301396,300442,603629,300857",
+        },
+      ];
+
+      // ==================== 逻辑区 ====================
+      const codesInput = document.getElementById("codes");
+      const btn = document.getElementById("btn");
+      const statusEl = document.getElementById("status");
+      const imgEl = document.getElementById("resultImg");
+      const sectorBar = document.getElementById("sectorBar");
+
+      // 渲染板块按钮
+      SECTORS.forEach((sector) => {
+        const b = document.createElement("button");
+        b.className = "sector-btn";
+        b.textContent = sector.name;
+        b.onclick = () => {
+          // 填入输入框
+          codesInput.value = sector.codes;
+          // 高亮当前选中
+          document
+            .querySelectorAll(".sector-btn")
+            .forEach((x) => x.classList.remove("active"));
+          b.classList.add("active");
+        };
+        sectorBar.appendChild(b);
+      });
+
+      // 点击分析
+      btn.onclick = async () => {
+        const codes = codesInput.value.trim();
+        if (!codes) {
+          statusEl.textContent = "请先输入股票代码";
+          return;
+        }
+
+        btn.disabled = true;
+        statusEl.textContent = "调用中，请稍候（约 10~30 秒）...";
+        imgEl.style.display = "none";
+
+        try {
+          const response = await fetch(FC_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ codes: codes }),
+          });
+
+          const text = await response.text();
+
+          let data;
+          try {
+            data = JSON.parse(text);
+          } catch (e) {
+            statusEl.textContent = "返回内容不是 JSON：\n" + text.slice(0, 500);
+            btn.disabled = false;
+            return;
+          }
+
+          if (data.error) {
+            statusEl.textContent = "❌ 出错：" + data.error;
+            btn.disabled = false;
+            return;
+          }
+
+          imgEl.src = "data:image/png;base64," + data.image;
+          imgEl.style.display = "block";
+          statusEl.textContent = "✓ 完成，数据基准：" + data.actual_end;
+        } catch (error) {
+          statusEl.textContent =
+            "❌ 调用出错：\n" +
+            error +
+            "\n\n如果是 CORS 错误，请到 FC 触发器里配置跨域允许来源为 *";
+        } finally {
+          btn.disabled = false;
+        }
+      };
+    </script>
+  </body>
+</html>
